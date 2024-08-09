@@ -20,10 +20,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -125,35 +122,93 @@ public class OssTemplate implements InitializingBean {
     }
 
     /**
-     * 获取 BASE_BUCKET 中指定名称的桶（即目录）
+     * 获取 BASE_BUCKET 中指定名称的桶（即目录）的属性
      *
      * @param bucketName 目录名称
-     * @return 指定目录名称的Optional对象
+     * @return 包含桶属性的 Map 对象，包含大小、过期时间等信息
      */
-    public Optional<String> getBucket(String bucketName) {
+    public Map<String, Object> getBucketProperties(String bucketName) {
+        Map<String, Object> properties = new HashMap<>();
+        long totalSize = 0L;
+
         if (StringUtils.hasText(BASE_BUCKET)) {
             // 构建目标前缀
             String targetPrefix = bucketName + "/";
 
-            // 列出 BASE_BUCKET 下的所有前缀（目录）
+            // 列出 BASE_BUCKET 下的所有对象
             ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
                     .bucket(BASE_BUCKET)
-                    .delimiter("/")
                     .prefix(targetPrefix)
                     .build());
 
-            // 检查是否存在以目标前缀开头的子目录
-            return response.commonPrefixes().stream()
-                    .filter(prefix -> prefix.prefix().equals(targetPrefix))
-                    .map(CommonPrefix::prefix)
-                    .findFirst();
+            // 计算桶的总大小
+            totalSize = response.contents().stream()
+                    .mapToLong(S3Object::size)
+                    .sum();
+
+            // 添加桶大小到属性
+            properties.put("size", totalSize);
+
+            // 获取 BASE_BUCKET 下的 bucketName 目录的生命周期配置
+            GetBucketLifecycleConfigurationRequest lifecycleRequest = GetBucketLifecycleConfigurationRequest.builder()
+                    .bucket(BASE_BUCKET)
+                    .build();
+
+            try {
+                GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(lifecycleRequest);
+
+                // 过滤并获取与 bucketName 相关的生命周期规则
+                Optional<LifecycleRule> relatedRule = lifecycleConfig.rules().stream()
+                        .filter(rule -> rule.filter().prefix().equals(BASE_BUCKET + "/" + targetPrefix))
+                        .findFirst();
+
+                if (relatedRule.isPresent()) {
+                    properties.put("lifecycleRules", relatedRule.get());
+                } else {
+                    properties.put("lifecycleRules", "No lifecycle configuration for this bucket");
+                }
+            } catch (Exception e) {
+                // 如果没有设置生命周期配置，则忽略异常
+                properties.put("lifecycleRules", "No lifecycle configuration");
+            }
         } else {
-            // 如果 BASE_BUCKET 为空，则返回顶级桶
-            return s3Client.listBuckets().buckets().stream()
+            // 如果 BASE_BUCKET 为空，则直接返回顶级桶的属性
+            Optional<Bucket> bucketOpt = s3Client.listBuckets().buckets().stream()
                     .filter(b -> b.name().equals(bucketName))
-                    .map(Bucket::name)
                     .findFirst();
+
+            if (bucketOpt.isPresent()) {
+                Bucket bucket = bucketOpt.get();
+                properties.put("name", bucket.name());
+                properties.put("creationDate", bucket.creationDate());
+
+                // 列出桶中的所有对象并计算大小
+                ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                        .bucket(bucketName)
+                        .build());
+
+                totalSize = response.contents().stream()
+                        .mapToLong(S3Object::size)
+                        .sum();
+
+                properties.put("size", totalSize);
+
+                // 获取生命周期配置
+                GetBucketLifecycleConfigurationRequest lifecycleRequest = GetBucketLifecycleConfigurationRequest.builder()
+                        .bucket(bucketName)
+                        .build();
+
+                try {
+                    GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(lifecycleRequest);
+                    properties.put("lifecycleRules", lifecycleConfig.rules());
+                } catch (Exception e) {
+                    // 如果没有设置生命周期配置，则忽略异常
+                    properties.put("lifecycleRules", "No lifecycle configuration");
+                }
+            }
         }
+
+        return properties;
     }
 
     /**
