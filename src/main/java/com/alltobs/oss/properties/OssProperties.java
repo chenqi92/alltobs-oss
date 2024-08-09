@@ -1,4 +1,4 @@
-package cn.allbs.oss.properties;
+package com.alltobs.oss.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

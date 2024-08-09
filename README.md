@@ -28,7 +28,7 @@
 oss:
   endpoint: http://xxx.xxx.xxx.xxx:9000
   # 所在地区
-  region: cn-north-1
+  region: com-north-1
   # minio账号或者
   access-key: adadmin
   # 密码

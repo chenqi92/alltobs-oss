@@ -1,6 +1,6 @@
-package cn.allbs.oss.annotation;
+package com.alltobs.oss.annotation;
 
-import cn.allbs.oss.OssAutoConfiguration;
+import com.alltobs.oss.OssAutoConfiguration;
 import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.*;

@@ -1,7 +1,7 @@
-package cn.allbs.oss;
+package com.alltobs.oss;
 
-import cn.allbs.oss.properties.OssProperties;
-import cn.allbs.oss.service.OssTemplate;
+import com.alltobs.oss.properties.OssProperties;
+import com.alltobs.oss.service.OssTemplate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

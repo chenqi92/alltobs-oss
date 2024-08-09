@@ -1,6 +1,6 @@
-package cn.allbs.oss.service;
+package com.alltobs.oss.service;
 
-import cn.allbs.oss.properties.OssProperties;
+import com.alltobs.oss.properties.OssProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.util.StringUtils;
