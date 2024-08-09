@@ -104,27 +104,70 @@ public class OssTemplate implements InitializingBean {
      *
      * @return 所有bucket的列表
      */
-    public List<Bucket> getAllBuckets() {
-        return s3Client.listBuckets().buckets();
+    public List<String> getAllBuckets() {
+        // 如果 BASE_BUCKET 存在，则获取 BASE_BUCKET 目录下的所有“桶”
+        if (StringUtils.hasText(BASE_BUCKET)) {
+            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                    .bucket(BASE_BUCKET)
+                    .delimiter("/")
+                    .build());
+
+            // 获取所有以 '/' 结尾的“文件夹”名称
+            return response.commonPrefixes().stream()
+                    .map(prefix -> prefix.prefix().replaceAll("/$", "")) // 去除末尾的 '/'
+                    .collect(Collectors.toList());
+        } else {
+            // 否则返回所有顶级桶
+            return s3Client.listBuckets().buckets().stream()
+                    .map(Bucket::name)
+                    .collect(Collectors.toList());
+        }
     }
 
     /**
-     * 获取指定名称的桶
+     * 获取 BASE_BUCKET 中指定名称的桶（即目录）
      *
-     * @param bucketName bucket名称
-     * @return 指定bucket的Optional对象
+     * @param bucketName 目录名称
+     * @return 指定目录名称的Optional对象
      */
-    public Optional<Bucket> getBucket(String bucketName) {
-        return s3Client.listBuckets().buckets().stream().filter(b -> b.name().equals(bucketName)).findFirst();
+    public Optional<String> getBucket(String bucketName) {
+        if (StringUtils.hasText(BASE_BUCKET)) {
+            // 构建目标前缀
+            String targetPrefix = bucketName + "/";
+
+            // 列出 BASE_BUCKET 下的所有前缀（目录）
+            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                    .bucket(BASE_BUCKET)
+                    .delimiter("/")
+                    .prefix(targetPrefix)
+                    .build());
+
+            // 检查是否存在以目标前缀开头的子目录
+            return response.commonPrefixes().stream()
+                    .filter(prefix -> prefix.prefix().equals(targetPrefix))
+                    .map(CommonPrefix::prefix)
+                    .findFirst();
+        } else {
+            // 如果 BASE_BUCKET 为空，则返回顶级桶
+            return s3Client.listBuckets().buckets().stream()
+                    .filter(b -> b.name().equals(bucketName))
+                    .map(Bucket::name)
+                    .findFirst();
+        }
     }
 
     /**
-     * 删除指定桶
+     * 删除指定桶或 BASE_BUCKET 下的目录
      *
      * @param bucketName bucket名称
      */
     public void removeBucket(String bucketName) {
-        s3Client.deleteBucket(DeleteBucketRequest.builder().bucket(bucketName).build());
+        if (StringUtils.hasText(BASE_BUCKET)) {
+            // 如果 BASE_BUCKET 不为空，删除的是 BASE_BUCKET 下的目录
+            removeObject(BASE_BUCKET, bucketName + "/");
+        } else {
+            s3Client.deleteBucket(DeleteBucketRequest.builder().bucket(bucketName).build());
+        }
     }
 
     /**
@@ -135,6 +178,10 @@ public class OssTemplate implements InitializingBean {
      * @return 对象列表
      */
     public List<S3Object> getAllObjectsByPrefix(String bucketName, String prefix) {
+        if (StringUtils.hasText(BASE_BUCKET)) {
+            bucketName = BASE_BUCKET;
+            prefix = prefix + "/";
+        }
         ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).prefix(prefix).build());
         return response.contents();
     }
