@@ -275,16 +275,11 @@ public class OssTemplate implements InitializingBean {
      * @return 生成的URL
      */
     public String getObjectURL(String bucketName, String objectName, Duration expires) {
-        final String finalObjectName;
-
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            finalObjectName = BASE_BUCKET + "/" + objectName;
-        } else {
-            finalObjectName = objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
         PresignedGetObjectRequest getObjectRequest = s3Presigner.presignGetObject(builder -> builder
-                .getObjectRequest(b -> b.bucket(bucketName).key(finalObjectName))
+                .getObjectRequest(b -> b.bucket(targetBucket).key(targetObjectName))
                 .signatureDuration(expires));
 
         return getObjectRequest.url().toString();
@@ -298,11 +293,10 @@ public class OssTemplate implements InitializingBean {
      * @return 文件URL
      */
     public String getObjectURL(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        GetUrlRequest getUrlRequest = GetUrlRequest.builder().bucket(bucketName).key(objectName).build();
+        GetUrlRequest getUrlRequest = GetUrlRequest.builder().bucket(targetBucket).key(targetObjectName).build();
         URL url = s3Client.utilities().getUrl(getUrlRequest);
         return url.toString();
     }
@@ -315,10 +309,10 @@ public class OssTemplate implements InitializingBean {
      * @return 文件的二进制流
      */
     public ResponseInputStream<GetObjectResponse> getObject(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
-        return s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(objectName).build());
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        return s3Client.getObject(GetObjectRequest.builder().bucket(targetBucket).key(targetObjectName).build());
     }
 
     /**
@@ -413,13 +407,12 @@ public class OssTemplate implements InitializingBean {
      * @return 上传响应对象
      */
     public PutObjectResponse putObject(String bucketName, String objectName, InputStream stream, long size, String contentType, Date expiresAt) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .contentLength(size)
                 .contentType(contentType)
                 .expires(expiresAt.toInstant())
@@ -501,10 +494,10 @@ public class OssTemplate implements InitializingBean {
      * @return 文件信息
      */
     public HeadObjectResponse getObjectInfo(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
-        return s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(objectName).build());
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        return s3Client.headObject(HeadObjectRequest.builder().bucket(targetBucket).key(targetObjectName).build());
     }
 
     /**
@@ -536,12 +529,12 @@ public class OssTemplate implements InitializingBean {
      * @return 上传ID
      */
     public String initiateMultipartUpload(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         CreateMultipartUploadResponse response = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .build());
         return response.uploadId();
     }
@@ -558,13 +551,12 @@ public class OssTemplate implements InitializingBean {
      * @return 上传响应对象
      */
     public PutObjectResponse putObjectWithEncryption(String bucketName, String objectName, InputStream stream, long size, String contentType, String sseAlgorithm) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .contentLength(size)
                 .contentType(contentType)
                 .serverSideEncryption(ServerSideEncryption.fromValue(sseAlgorithm))
@@ -583,14 +575,14 @@ public class OssTemplate implements InitializingBean {
      * @return 上传响应对象
      */
     public CompleteMultipartUploadResponse completeMultipartUpload(String bucketName, String objectName, String uploadId, List<CompletedPart> partETags) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder().parts(partETags).build();
 
         return s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .uploadId(uploadId)
                 .multipartUpload(completedMultipartUpload)
                 .build());
@@ -643,12 +635,12 @@ public class OssTemplate implements InitializingBean {
      * @param acl        访问控制列表（例如CannedAccessControlList.PublicRead）
      */
     public void setObjectAcl(String bucketName, String objectName, String acl) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         s3Client.putObjectAcl(PutObjectAclRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .acl(acl)
                 .build());
     }
@@ -661,12 +653,12 @@ public class OssTemplate implements InitializingBean {
      * @return ACL信息
      */
     public GetObjectAclResponse getObjectAcl(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         return s3Client.getObjectAcl(GetObjectAclRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .build());
     }
 
@@ -678,9 +670,9 @@ public class OssTemplate implements InitializingBean {
      * @param tags       标签集合
      */
     public void setObjectTags(String bucketName, String objectName, Map<String, String> tags) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         Tagging tagging = Tagging.builder()
                 .tagSet(tags.entrySet().stream()
                         .map(entry -> Tag.builder().key(entry.getKey()).value(entry.getValue()).build())
@@ -688,8 +680,8 @@ public class OssTemplate implements InitializingBean {
                 .build();
 
         s3Client.putObjectTagging(PutObjectTaggingRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .tagging(tagging)
                 .build());
     }
@@ -702,12 +694,12 @@ public class OssTemplate implements InitializingBean {
      * @return 标签集合
      */
     public Map<String, String> getObjectTags(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         GetObjectTaggingResponse taggingResponse = s3Client.getObjectTagging(GetObjectTaggingRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(targetBucket)
+                .key(targetObjectName)
                 .build());
 
         return taggingResponse.tagSet().stream()
