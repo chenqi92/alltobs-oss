@@ -21,7 +21,6 @@ import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -441,49 +440,104 @@ public class OssTemplate implements InitializingBean {
     /**
      * 上传文件并设置自动删除时间
      *
-     * @param bucketName bucket名称
-     * @param objectName 文件名称
-     * @param stream     文件输入流
-     * @param duration   文件的存活时长，单位为时间单位
-     * @param timeUnit   时间单位，如 TimeUnit.DAYS 表示天
+     * @param bucketName     bucket名称
+     * @param objectName     文件名称
+     * @param stream         文件输入流
+     * @param durationInDays 文件的存活时长，单位为天
      * @throws IOException IO异常
      */
-    public void putObjectWithExpiration(String bucketName, String objectName, InputStream stream, long duration, TimeUnit timeUnit) throws IOException {
-        Date expirationDate = new Date(System.currentTimeMillis() + timeUnit.toMillis(duration));
-        putObject(bucketName, objectName, stream, stream.available(), "application/octet-stream", expirationDate);
+    public void putObjectWithExpiration(String bucketName, String objectName, InputStream stream, long durationInDays) throws IOException {
+        putObject(bucketName, objectName, stream, stream.available(), "application/octet-stream");
+        setLifecycleRule(bucketName, objectName, durationInDays);
     }
 
     /**
      * 上传文件并设置自动删除时间，指定 contentType
      *
-     * @param bucketName  bucket名称
-     * @param objectName  文件名称
-     * @param stream      文件输入流
-     * @param contentType 文件类型
-     * @param duration    文件的存活时长，单位为时间单位
-     * @param timeUnit    时间单位，如 TimeUnit.DAYS 表示天
+     * @param bucketName     bucket名称
+     * @param objectName     文件名称
+     * @param stream         文件输入流
+     * @param contentType    文件类型
+     * @param durationInDays 文件的存活时长，单位为天
      * @throws IOException IO异常
      */
-    public void putObjectWithExpiration(String bucketName, String objectName, String contentType, InputStream stream, long duration, TimeUnit timeUnit) throws IOException {
-        Date expirationDate = new Date(System.currentTimeMillis() + timeUnit.toMillis(duration));
-        putObject(bucketName, objectName, stream, stream.available(), contentType, expirationDate);
+    public void putObjectWithExpiration(String bucketName, String objectName, String contentType, InputStream stream, long durationInDays) throws IOException {
+        putObject(bucketName, objectName, stream, stream.available(), contentType);
+        setLifecycleRule(bucketName, objectName, durationInDays);
     }
 
     /**
      * 上传文件并设置自动删除时间
      *
-     * @param bucketName  bucket名称
-     * @param objectName  文件名称
-     * @param stream      文件输入流
-     * @param size        文件大小
-     * @param contentType 文件类型
-     * @param duration    文件的存活时长，单位为时间单位
-     * @param timeUnit    时间单位，如 TimeUnit.DAYS 表示天
+     * @param bucketName     bucket名称
+     * @param objectName     文件名称
+     * @param stream         文件输入流
+     * @param size           文件大小
+     * @param contentType    文件类型
+     * @param durationInDays 文件的存活时长，单位为天
      * @return 上传响应对象
+     * @throws IOException IO异常
      */
-    public PutObjectResponse putObjectWithExpiration(String bucketName, String objectName, InputStream stream, long size, String contentType, long duration, TimeUnit timeUnit) {
-        Date expirationDate = new Date(System.currentTimeMillis() + timeUnit.toMillis(duration));
-        return putObject(bucketName, objectName, stream, size, contentType, expirationDate);
+    public PutObjectResponse putObjectWithExpiration(String bucketName, String objectName, InputStream stream, long size, String contentType, long durationInDays) throws IOException {
+        PutObjectResponse response = putObject(bucketName, objectName, stream, size, contentType);
+        setLifecycleRule(bucketName, objectName, durationInDays);
+        return response;
+    }
+
+    /**
+     * 为指定的对象设置生命周期规则，以便在指定的天数后自动删除。
+     *
+     * @param bucketName     桶名称
+     * @param objectName     文件名称
+     * @param expirationDays 过期天数
+     */
+    private void setLifecycleRule(String bucketName, String objectName, long expirationDays) {
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetPrefix = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        LifecycleRule rule = LifecycleRule.builder()
+                .id("AutoDelete-" + objectName)
+                .filter(LifecycleRuleFilter.builder().prefix(targetPrefix).build())
+                .expiration(LifecycleExpiration.builder().days((int) expirationDays).build())
+                .status(ExpirationStatus.ENABLED)
+                .build();
+
+        BucketLifecycleConfiguration configuration = BucketLifecycleConfiguration.builder()
+                .rules(rule)
+                .build();
+
+        s3Client.putBucketLifecycleConfiguration(PutBucketLifecycleConfigurationRequest.builder()
+                .bucket(targetBucket)
+                .lifecycleConfiguration(configuration)
+                .build());
+    }
+
+    /**
+     * 如果对象元数据中得过期时间已到，则删除所有过期对象
+     *
+     * @param bucketName 桶名称
+     */
+    public void cleanupExpiredObjects(String bucketName) {
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .build());
+
+        for (S3Object s3Object : response.contents()) {
+            HeadObjectResponse headObjectResponse = s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(targetBucket)
+                    .key(s3Object.key())
+                    .build());
+
+            String expiresAt = headObjectResponse.metadata().get("expiresAt");
+            if (expiresAt != null && Long.parseLong(expiresAt) < System.currentTimeMillis()) {
+                // 删除过期的对象
+                s3Client.deleteObject(DeleteObjectRequest.builder()
+                        .bucket(targetBucket)
+                        .key(s3Object.key())
+                        .build());
+            }
+        }
     }
 
     /**
