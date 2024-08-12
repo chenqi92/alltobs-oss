@@ -232,12 +232,27 @@ public class OssTemplate implements InitializingBean {
      */
     public List<S3Object> getAllObjectsByPrefix(String bucketName, String prefix) {
         if (StringUtils.hasText(BASE_BUCKET)) {
+            // 构建完整的前缀路径
+            if (StringUtils.hasText(bucketName)) {
+                prefix = bucketName + "/" + (prefix.startsWith("/") ? prefix.substring(1) : prefix);
+            }
+
+            // 确保前缀与 BASE_BUCKET 结合
             bucketName = BASE_BUCKET;
-            prefix = prefix + "/";
         }
-        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).prefix(prefix).build());
+
+        // 创建 ListObjectsV2Request，带上前缀
+        ListObjectsV2Request request = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .prefix(prefix)  // 以指定的前缀开头
+                .build();
+
+        // 获取符合条件的所有对象
+        ListObjectsV2Response response = s3Client.listObjectsV2(request);
+
         return response.contents();
     }
+
 
     /**
      * 获取文件的下载URL，并设置有效期
