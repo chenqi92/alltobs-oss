@@ -65,16 +65,68 @@ public class OssTemplate implements InitializingBean {
         BASE_BUCKET = ossProperties.getBucketName();
 
         // 创建默认的存储桶
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            if (s3Client.listBuckets().buckets().stream().noneMatch(b -> b.name().equals(BASE_BUCKET))) {
-                s3Client.createBucket(CreateBucketRequest.builder().bucket(BASE_BUCKET).build());
-            }
+        if (StringUtils.hasText(BASE_BUCKET) && !isBucketExist(BASE_BUCKET)) {
+            createBucket(BASE_BUCKET);
         }
 
         // 为每个子目录设置生命周期规则
         if (ossProperties.getExpiringBuckets() != null) {
             ossProperties.getExpiringBuckets().forEach(this::createBucketFolderWithExpiration);
         }
+    }
+
+    /**
+     * 检查桶是否存在
+     *
+     * @param bucketName 桶名称
+     * @return 是否存在
+     */
+    public boolean isBucketExist(String bucketName) {
+        return s3Client.listBuckets().buckets().stream().anyMatch(b -> b.name().equals(bucketName));
+    }
+
+    /**
+     * 检查桶是否存在
+     *
+     * @param bucketName 桶名称
+     * @return 是否存在
+     */
+    public boolean doesBucketOrFolderExist(String bucketName) {
+        if (StringUtils.hasText(BASE_BUCKET)) {
+            // 构建目标前缀，确保 folderName 以 "/" 结尾
+            String targetPrefix = bucketName.endsWith("/") ? bucketName : bucketName + "/";
+            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                    .bucket(BASE_BUCKET)
+                    .prefix(targetPrefix)
+                    .delimiter("/")
+                    .build());
+            return !response.contents().isEmpty();
+        } else {
+            return s3Client.listBuckets().buckets().stream().anyMatch(b -> b.name().equals(bucketName));
+        }
+    }
+
+    /**
+     * 检查桶是否包含指定目录
+     *
+     * @param bucketName 桶名称
+     * @param folderName 目录名称
+     * @return 是否存在
+     */
+    public boolean doesBucketContainFolder(String bucketName, String folderName) {
+
+        // 构建目标前缀，确保 folderName 以 "/" 结尾
+        String targetPrefix = folderName.endsWith("/") ? folderName : folderName + "/";
+
+        // 列出 bucket 下的所有对象，以目标前缀为筛选条件
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .prefix(targetPrefix)
+                .delimiter("/")
+                .build());
+
+        // 如果存在bucket，返回 true，否则返回 false
+        return !response.contents().isEmpty();
     }
 
     /**
@@ -90,7 +142,7 @@ public class OssTemplate implements InitializingBean {
             putObject(BASE_BUCKET, bucketName + "/", new byte[0]);
         } else {
             // 检查是否已存在同名桶（或目录），如果不存在则创建
-            if (s3Client.listBuckets().buckets().stream().noneMatch(b -> b.name().equals(bucketName))) {
+            if (!isBucketExist(bucketName)) {
                 s3Client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
             }
         }
@@ -129,83 +181,28 @@ public class OssTemplate implements InitializingBean {
      */
     public Map<String, Object> getBucketProperties(String bucketName) {
         Map<String, Object> properties = new HashMap<>();
-        long totalSize = 0L;
+        String targetPrefix = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" : "";
+        String finalBucketName = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
 
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            // 构建目标前缀
-            String targetPrefix = bucketName + "/";
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
+                .bucket(finalBucketName)
+                .prefix(targetPrefix)
+                .build());
 
-            // 列出 BASE_BUCKET 下的所有对象
-            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                    .bucket(BASE_BUCKET)
-                    .prefix(targetPrefix)
-                    .build());
+        long totalSize = response.contents().stream().mapToLong(S3Object::size).sum();
+        properties.put("size", totalSize);
 
-            // 计算桶的总大小
-            totalSize = response.contents().stream()
-                    .mapToLong(S3Object::size)
-                    .sum();
+        try {
+            GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(
+                    GetBucketLifecycleConfigurationRequest.builder().bucket(finalBucketName).build());
 
-            // 添加桶大小到属性
-            properties.put("size", totalSize);
-
-            // 获取 BASE_BUCKET 下的 bucketName 目录的生命周期配置
-            GetBucketLifecycleConfigurationRequest lifecycleRequest = GetBucketLifecycleConfigurationRequest.builder()
-                    .bucket(BASE_BUCKET)
-                    .build();
-
-            try {
-                GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(lifecycleRequest);
-
-                // 过滤并获取与 bucketName 相关的生命周期规则
-                Optional<LifecycleRule> relatedRule = lifecycleConfig.rules().stream()
-                        .filter(rule -> rule.filter().prefix().equals(BASE_BUCKET + "/" + targetPrefix))
-                        .findFirst();
-
-                if (relatedRule.isPresent()) {
-                    properties.put("lifecycleRules", relatedRule.get());
-                } else {
-                    properties.put("lifecycleRules", "No lifecycle configuration for this bucket");
-                }
-            } catch (Exception e) {
-                // 如果没有设置生命周期配置，则忽略异常
-                properties.put("lifecycleRules", "No lifecycle configuration");
-            }
-        } else {
-            // 如果 BASE_BUCKET 为空，则直接返回顶级桶的属性
-            Optional<Bucket> bucketOpt = s3Client.listBuckets().buckets().stream()
-                    .filter(b -> b.name().equals(bucketName))
+            Optional<LifecycleRule> relatedRule = lifecycleConfig.rules().stream()
+                    .filter(rule -> rule.filter().prefix().equals(targetPrefix))
                     .findFirst();
 
-            if (bucketOpt.isPresent()) {
-                Bucket bucket = bucketOpt.get();
-                properties.put("name", bucket.name());
-                properties.put("creationDate", bucket.creationDate());
-
-                // 列出桶中的所有对象并计算大小
-                ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                        .bucket(bucketName)
-                        .build());
-
-                totalSize = response.contents().stream()
-                        .mapToLong(S3Object::size)
-                        .sum();
-
-                properties.put("size", totalSize);
-
-                // 获取生命周期配置
-                GetBucketLifecycleConfigurationRequest lifecycleRequest = GetBucketLifecycleConfigurationRequest.builder()
-                        .bucket(bucketName)
-                        .build();
-
-                try {
-                    GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(lifecycleRequest);
-                    properties.put("lifecycleRules", lifecycleConfig.rules());
-                } catch (Exception e) {
-                    // 如果没有设置生命周期配置，则忽略异常
-                    properties.put("lifecycleRules", "No lifecycle configuration");
-                }
-            }
+            properties.put("lifecycleRules", relatedRule.orElse(null));
+        } catch (Exception e) {
+            properties.put("lifecycleRules", "No lifecycle configuration");
         }
 
         return properties;
@@ -219,7 +216,8 @@ public class OssTemplate implements InitializingBean {
     public void removeBucket(String bucketName) {
         if (StringUtils.hasText(BASE_BUCKET)) {
             // 如果 BASE_BUCKET 不为空，删除的是 BASE_BUCKET 下的目录
-            removeObject(BASE_BUCKET, bucketName + "/");
+            String objectName = bucketName + "/";
+            removeObject(BASE_BUCKET, objectName);
         } else {
             s3Client.deleteBucket(DeleteBucketRequest.builder().bucket(bucketName).build());
         }
@@ -343,14 +341,17 @@ public class OssTemplate implements InitializingBean {
      * @param contextType 文件类型
      * @return 上传响应对象
      */
-    public PutObjectResponse putObject(String bucketName, String objectName, InputStream stream, long size, String contextType) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
+    public PutObjectResponse putObject(String bucketName, String objectName, InputStream stream, long size, String contextType) throws IOException {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
         }
 
+        String finalBucketName = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String finalObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
+                .bucket(finalBucketName)
+                .key(finalObjectName)
                 .contentLength(size)
                 .contentType(contextType)
                 .build();
@@ -498,11 +499,19 @@ public class OssTemplate implements InitializingBean {
      * @param objectName 文件名称
      */
     public void removeObject(String bucketName, String objectName) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            objectName = BASE_BUCKET + "/" + objectName;
-        }
-        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(objectName).build());
+        String finalBucketName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET)
+                ? BASE_BUCKET
+                : bucketName;
+        String finalObjectName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET)
+                ? bucketName + "/" + objectName
+                : objectName;
+
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(finalBucketName)
+                .key(finalObjectName)
+                .build());
     }
+
 
     /**
      * 初始化多部分上传
