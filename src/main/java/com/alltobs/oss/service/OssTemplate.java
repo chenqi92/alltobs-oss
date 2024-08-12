@@ -614,15 +614,14 @@ public class OssTemplate implements InitializingBean {
      * @param destinationKey        目标对象key
      */
     public void copyObject(String sourceBucketName, String sourceKey, String destinationBucketName, String destinationKey) {
-        if (StringUtils.hasText(BASE_BUCKET)) {
-            sourceKey = BASE_BUCKET + "/" + sourceKey;
-            destinationKey = BASE_BUCKET + "/" + destinationKey;
-        }
+        String targetSourceKey = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET + "/" + sourceKey : sourceKey;
+        String targetDestinationKey = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET + "/" + destinationKey : destinationKey;
+
         CopyObjectRequest copyObjectRequest = CopyObjectRequest.builder()
                 .sourceBucket(sourceBucketName)
-                .sourceKey(sourceKey)
+                .sourceKey(targetSourceKey)
                 .destinationBucket(destinationBucketName)
-                .destinationKey(destinationKey)
+                .destinationKey(targetDestinationKey)
                 .build();
         s3Client.copyObject(copyObjectRequest);
     }
