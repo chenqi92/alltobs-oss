@@ -9,24 +9,25 @@
 | sts                       | 2.27.1 |
 | auth                      | 2.27.1 |
 
-## 使用
-### 添加依赖
+## 包含的主要功能和示例
+- 创建bucket
+- 删除bucket
+- 文件上传
+- 拷贝文件
+- 删除文件
+- 文件下载
+- 设置文件标签
+- 上传文件指定时间自动删除
+- 上传文件并加密
+- 分片上传
+- 断点续传
+- 生成预签名url，直接前端上传不经过后端
 
-```xml
-<dependency>
-  <groupId>com.alltobs</groupId>
-  <artifactId>alltobs-oss</artifactId>
-  <version>1.0.0</version>
-</dependency>
-```
+## 源码地址
+[demo地址](https://github.com/chenqi92/alltobs-oss)
 
-### 操作方法使用说明
-[查看使用说明](./METHOD.md)
-
-### demo地址
+## 使用demo地址
 [demo地址](https://github.com/chenqi92/alltobs-demo/tree/master/alltobs-oss-demo)
-
-
 
 ## 前置测试环境
 首先使用docker-compose安装了最新的minio用于测试
@@ -82,7 +83,7 @@ oss:
 - `access-key`可以直接使用控制台账号，但是建议在控制台中生成账号和密钥
 - `secret-key`可以直接使用控制台密钥，但是建议在控制台中生成账号和密钥
 - `bucket-name` 设置一个默认的文件桶，比如不同项目使用同一个文件库，以项目为文件桶分隔
-- `expiring-buckets` 里面设置的是生命周期会过期的文件夹，创建位置位于bucket-name下，比如bucket-name叫test,那么会在test目录下创建一个生命周期为30天的文件夹temp-bucket-1，生命周期为60天的文件夹temp-bucket-2
+- `expiring-buckets` 里面设置的是包含生命周期的文件夹，创建位置位于bucket-name下，比如bucket-name叫test,那么会在test目录下创建一个生命周期为30天的文件夹temp-bucket-1，生命周期为60天的文件夹temp-bucket-2
 
 ###  启动类注解`@EnableAllbsOss`
 ![启用](https://nas.allbs.cn:9006/cloudpic/2024/08/7015d4fb5a252f2db7a2a62e02298d6f.png)
@@ -279,3 +280,274 @@ public R<Map<String, String>> getObjectTags(@RequestParam String bucketName, @Re
 }
 ```
 ![image.png](https://nas.allbs.cn:9006/cloudpic/2024/08/e28377d2dfbdb14129e33c8cbd0f962e.png)
+
+### 上传一个会定时删除得文件
+```java
+@PostMapping("putObjectWithExpiration")  
+public R<String> putObjectWithExpiration(@RequestParam String bucketName, @RequestParam MultipartFile file, @RequestParam int days) {  
+    String fileName = file.getOriginalFilename();  
+    try {  
+        String uuid = UUID.randomUUID() + "." + FileUtil.getFileType(fileName);  
+        ossTemplate.putObjectWithExpiration(bucketName, uuid, file.getInputStream(), days);  
+        return R.ok("File uploaded: " + uuid);  
+    } catch (IOException e) {  
+        return R.fail("Failed to upload file: " + fileName);  
+    }  
+}
+```
+![image.png](https://nas.allbs.cn:9006/cloudpic/2024/08/a35627793af13d651240c31ddf75ed92.png)
+
+### 上传加密文件
+需要在服务端配置KMS，这里使用得是默认的AES256，其他可以调`putObjectWithEncryption`方法
+```java
+@PostMapping("/uploadWithEncryption")  
+public R<String> uploadWithEncryption(@RequestParam String bucketName,  
+                                      @RequestParam("file") MultipartFile file) {  
+    String uuid = UUID.randomUUID() + "." + FileUtil.getFileType(file.getOriginalFilename());  
+    try (InputStream inputStream = file.getInputStream()) {  
+        PutObjectResponse response = ossTemplate.uploadWithEncryption(  
+                bucketName,  
+                uuid,                inputStream,                file.getSize(),  
+                file.getContentType()  
+        );  
+        return R.ok("File uploaded with encryption: " + response.toString());  
+    } catch (IOException e) {  
+        return R.fail("File upload failed: " + e.getMessage());  
+    }  
+}
+```
+
+### 分片上传
+```java
+@PostMapping("/uploadMultipart")  
+public R<String> uploadMultipart(@RequestParam String bucketName,  
+                                 @RequestParam MultipartFile file) throws IOException, InterruptedException {  
+    String objectName = file.getOriginalFilename();  
+    // 初始化分片上传  
+    String uploadId = ossTemplate.initiateMultipartUpload(bucketName, objectName);  
+  
+    // 将文件按部分大小（5MB）分块上传  
+    long partSize = 5 * 1024 * 1024;  
+    long fileSize = file.getSize();  
+    int partCount = (int) Math.ceil((double) fileSize / partSize);  
+  
+    // 用于存储已上传的部分  
+    List<CompletedPart> completedParts = Collections.synchronizedList(new ArrayList<>());  
+  
+    // 创建线程池  
+    ExecutorService executor = Executors.newFixedThreadPool(Math.min(partCount, 10));  
+  
+    for (int i = 0; i < partCount; i++) {  
+        final int partNumber = i + 1;  
+        long startPos = i * partSize;  
+        long size = Math.min(partSize, fileSize - startPos);  
+  
+        executor.submit(() -> {  
+            try (InputStream inputStream = file.getInputStream()) {  
+                inputStream.skip(startPos);  
+                byte[] buffer = new byte[(int) size];  
+                int bytesRead = inputStream.read(buffer, 0, (int) size);  
+  
+                if (bytesRead > 0) {  
+                    CompletedPart part = ossTemplate.uploadPart(bucketName, objectName, uploadId, partNumber, buffer);  
+                    completedParts.add(part);  
+                }  
+            } catch (IOException e) {  
+                e.printStackTrace();  
+            }  
+        });  
+    }  
+  
+    executor.shutdown();  
+    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);  
+  
+    // 检查是否成功上传了所有部分  
+    if (completedParts.size() == partCount) {  
+        // 在完成上传之前，按 partNumber 升序排序  
+        completedParts.sort(Comparator.comparing(CompletedPart::partNumber));  
+  
+        // 完成分片上传  
+        ossTemplate.completeMultipartUpload(bucketName, objectName, uploadId, completedParts);  
+        return R.ok("Upload completed successfully uploadId: " + uploadId);  
+    } else {  
+        // 如果有部分上传失败，取消上传  
+        ossTemplate.abortMultipartUpload(bucketName, objectName, uploadId);  
+        return R.fail("Upload failed, some parts are missing.");  
+    }  
+}
+```
+![image.png](https://nas.allbs.cn:9006/cloudpic/2024/08/33051c4feb95b774bb9218b1509963f8.png)
+
+### 断点续传
+`uploadId`是上一步分片上传获取到的，可以做个的记录，方便断点续传时使用。我这边测试方法是分片上传过程中直接终止了服务。
+```java
+@PostMapping("/resumeMultipart")  
+public R<String> resumeMultipart(@RequestParam String bucketName,  
+                                 @RequestParam MultipartFile file,  
+                                 @RequestParam String uploadId) throws IOException, InterruptedException {  
+    String objectName = file.getOriginalFilename();  
+  
+    // 将文件读入内存  
+    byte[] fileBytes = file.getBytes();  
+  
+    // 获取已经上传的部分  
+    List<CompletedPart> completedParts = ossTemplate.listParts(bucketName, objectName, uploadId);  
+  
+    // 继续上传未完成的部分  
+    long partSize = 5 * 1024 * 1024;  
+    long fileSize = fileBytes.length;  
+    int partCount = (int) Math.ceil((double) fileSize / partSize);  
+  
+    ExecutorService executor = Executors.newFixedThreadPool(Math.min(partCount, 10));  
+  
+    for (int i = completedParts.size(); i < partCount; i++) {  
+        final int partNumber = i + 1;  
+        long startPos = i * partSize;  
+        long size = Math.min(partSize, fileSize - startPos);  
+  
+        executor.submit(() -> {  
+            try {  
+                byte[] buffer = Arrays.copyOfRange(fileBytes, (int) startPos, (int) (startPos + size));  
+                CompletedPart part = ossTemplate.uploadPart(bucketName, objectName, uploadId, partNumber, buffer);  
+                synchronized (completedParts) {  
+                    completedParts.add(part);  
+                }  
+            } catch (Exception e) {  
+                e.printStackTrace();  
+            }  
+        });  
+    }  
+  
+    executor.shutdown();  
+    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);  
+  
+    // 按 partNumber 升序排序  
+    completedParts.sort(Comparator.comparing(CompletedPart::partNumber));  
+  
+    // 完成分片上传  
+    ossTemplate.completeMultipartUpload(bucketName, objectName, uploadId, completedParts);  
+  
+    return R.ok("Upload resumed and completed successfully");  
+}
+```
+![image.png](https://nas.allbs.cn:9006/cloudpic/2024/08/d8916e0cc3ce00011f010ea532046272.png)
+
+### 前端不通过后台服务器使用预签名的表单上传数据
+使用这种方式可以让客户端能够直接与 S3 进行交互，减少了服务器的负担，并且可以利用 S3 的上传能力进行大文件的处理。
+
+```java
+@GetMapping("/generatePreSignedUrl")  
+public R<String> generatePreSignedUrl(@RequestParam String bucketName,  
+                                      @RequestParam String objectName,  
+                                      @RequestParam int expiration) {  
+    String preSignedUrl = ossTemplate.generatePreSignedUrlForPut(bucketName, objectName, expiration);  
+    return R.ok(preSignedUrl);  
+}
+```
+
+前面的demo
+```html
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <title>文件上传</title>  
+    <style>        body {  
+            font-family: Arial, sans-serif;  
+            margin: 20px;  
+        }  
+  
+        .upload-container {  
+            max-width: 500px;  
+            margin: 0 auto;  
+            padding: 20px;  
+            border: 2px solid #ccc;  
+            border-radius: 10px;  
+            text-align: center;  
+        }  
+  
+        .file-input {  
+            margin-bottom: 20px;  
+        }  
+  
+        .progress-bar {  
+            width: 100%;  
+            background-color: #f3f3f3;  
+            border-radius: 5px;  
+            overflow: hidden;  
+            margin-bottom: 10px;  
+        }  
+  
+        .progress {  
+            height: 20px;  
+            background-color: #4caf50;  
+            width: 0;  
+        }  
+    </style>  
+</head>  
+<body>  
+<div class="upload-container">  
+    <h2>上传文件到 S3</h2>  
+    <input type="file" id="fileInput" class="file-input"/>  
+    <div class="progress-bar">  
+        <div class="progress" id="progressBar"></div>  
+    </div>  
+    <button onclick="uploadFile()">上传文件</button>  
+    <p id="statusText"></p>  
+</div>  
+  
+<script>  
+    async function uploadFile() {  
+        const fileInput = document.getElementById('fileInput');  
+        const file = fileInput.files[0];  
+  
+        if (!file) {  
+            alert('请选择一个文件进行上传');  
+            return;  
+        }  
+  
+        // 获取预签名 URL        const response = await fetch(`/oss/generatePreSignedUrl?bucketName=myBucket&objectName=${file.name}&expiration=15`);  
+        const result = await response.json();  
+  
+        if (result.code !== 200) {  
+            document.getElementById('statusText').innerText = '获取预签名URL失败';  
+            return;  
+        }  
+  
+        const presignedUrl = result.data;  // 从返回的 JSON 数据中提取预签名的 URL  
+        const xhr = new XMLHttpRequest();  
+        xhr.open('PUT', presignedUrl, true);  
+        xhr.setRequestHeader('Content-Type', file.type);  
+  
+        // 更新进度条  
+        xhr.upload.onprogress = function(event) {  
+            if (event.lengthComputable) {  
+                const percentComplete = (event.loaded / event.total) * 100;  
+                document.getElementById('progressBar').style.width = percentComplete + '%';  
+            }  
+        };  
+  
+        // 处理上传完成后的事件  
+        xhr.onload = function() {  
+            if (xhr.status === 200) {  
+                document.getElementById('statusText').innerText = '文件上传成功！';  
+            } else {  
+                document.getElementById('statusText').innerText = '文件上传失败，请重试。';  
+            }  
+        };  
+  
+        // 错误处理  
+        xhr.onerror = function() {  
+            document.getElementById('statusText').innerText = '文件上传过程中出现错误。';  
+        };  
+  
+        xhr.send(file);  
+    }  
+</script>  
+</body>  
+</html>
+```
+
+![image.png](https://nas.allbs.cn:9006/cloudpic/2024/08/261d8b273b9097619450a8205e9addad.png)
+
