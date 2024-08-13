@@ -402,10 +402,14 @@ public class OssTemplate implements InitializingBean {
      * @param stream      文件输入流
      * @param size        文件大小
      * @param contentType 文件类型
-     * @param expiresAt   过期时间
+     * @param expiresAt   过期时间 生成的预签名URL等行为会受到限制 并不直接删除对象
      * @return 上传响应对象
      */
     public PutObjectResponse putObject(String bucketName, String objectName, InputStream stream, long size, String contentType, Date expiresAt) {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
+        }
+
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
@@ -574,23 +578,34 @@ public class OssTemplate implements InitializingBean {
                 .build());
     }
 
-
     /**
-     * 初始化多部分上传
+     * 上传文件并进行服务器端加密 使用默认得AES256 作为服务器端加密避免服务端出现没有配置KMS 密钥导致得问题
      *
-     * @param bucketName bucket名称
-     * @param objectName 对象名称
-     * @return 上传ID
+     * @param bucketName  bucket名称
+     * @param objectName  文件名称
+     * @param stream      文件输入流
+     * @param size        文件大小
+     * @param contentType 文件类型
+     * @return 上传响应对象
      */
-    public String initiateMultipartUpload(String bucketName, String objectName) {
+    public PutObjectResponse uploadWithEncryption(String bucketName, String objectName, InputStream stream, long size, String contentType) throws IOException {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
+        }
+
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
+        // 使用 AES256 作为服务器端加密
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(targetBucket)
                 .key(targetObjectName)
-                .build());
-        return response.uploadId();
+                .contentLength(size)
+                .contentType(contentType)
+                .serverSideEncryption(ServerSideEncryption.AES256)
+                .build();
+
+        return s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(stream, size));
     }
 
     /**
@@ -605,6 +620,10 @@ public class OssTemplate implements InitializingBean {
      * @return 上传响应对象
      */
     public PutObjectResponse putObjectWithEncryption(String bucketName, String objectName, InputStream stream, long size, String contentType, String sseAlgorithm) {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
+        }
+
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
@@ -620,26 +639,124 @@ public class OssTemplate implements InitializingBean {
     }
 
     /**
-     * 完成多部分上传
+     * 初始化分片上传
+     *
+     * @param bucketName bucket名称
+     * @param objectName 对象名称
+     * @return 上传ID
+     */
+    public String initiateMultipartUpload(String bucketName, String objectName) {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
+        }
+
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
+                .bucket(targetBucket)
+                .key(targetObjectName)
+                .build());
+        return response.uploadId();
+    }
+
+    /**
+     * 上传部分
      *
      * @param bucketName bucket名称
      * @param objectName 对象名称
      * @param uploadId   上传ID
-     * @param partETags  上传块的ETag列表
-     * @return 上传响应对象
+     * @param partNumber 部分编号
+     * @param buffer     缓冲区
+     * @return 已完成的部分
      */
-    public CompleteMultipartUploadResponse completeMultipartUpload(String bucketName, String objectName, String uploadId, List<CompletedPart> partETags) {
+    public CompletedPart uploadPart(String bucketName, String objectName, String uploadId, int partNumber, byte[] buffer) {
+
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder().parts(partETags).build();
+        UploadPartResponse response = s3Client.uploadPart(UploadPartRequest.builder()
+                        .bucket(targetBucket)
+                        .key(targetObjectName)
+                        .uploadId(uploadId)
+                        .partNumber(partNumber)
+                        .contentLength((long) buffer.length)
+                        .build(),
+                RequestBody.fromBytes(buffer));
+        return CompletedPart.builder()
+                .partNumber(partNumber)
+                .eTag(response.eTag())
+                .build();
+    }
 
-        return s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .uploadId(uploadId)
-                .multipartUpload(completedMultipartUpload)
-                .build());
+    /**
+     * 列出部分
+     *
+     * @param bucketName bucket名称
+     * @param objectName 对象名称
+     * @param uploadId   上传ID
+     * @return 部分列表
+     */
+    public List<CompletedPart> listParts(String bucketName, String objectName, String uploadId) {
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        ListPartsResponse response = s3Client.listParts(
+                ListPartsRequest.builder()
+                        .bucket(targetBucket)
+                        .key(targetObjectName)
+                        .uploadId(uploadId)
+                        .build());
+
+        return response.parts().stream()
+                .map(p -> CompletedPart.builder()
+                        .partNumber(p.partNumber())
+                        .eTag(p.eTag())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 完成分片上传
+     *
+     * @param bucketName     bucket名称
+     * @param objectName     对象名称
+     * @param uploadId       上传ID
+     * @param completedParts 已完成的部分
+     */
+    public void completeMultipartUpload(String bucketName, String objectName, String uploadId, List<CompletedPart> completedParts) {
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
+                .parts(completedParts)
+                .build();
+        s3Client.completeMultipartUpload(
+                CompleteMultipartUploadRequest.builder()
+                        .bucket(targetBucket)
+                        .key(targetObjectName)
+                        .uploadId(uploadId)
+                        .multipartUpload(completedMultipartUpload)
+                        .build());
+    }
+
+    /**
+     * 放弃多部分上传
+     *
+     * @param bucketName bucket名称
+     * @param objectName 对象名称
+     * @param uploadId   上传ID
+     */
+    public void abortMultipartUpload(String bucketName, String objectName, String uploadId) {
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        s3Client.abortMultipartUpload(
+                AbortMultipartUploadRequest.builder()
+                        .bucket(targetBucket)
+                        .key(targetObjectName)
+                        .uploadId(uploadId)
+                        .build());
     }
 
     /**
