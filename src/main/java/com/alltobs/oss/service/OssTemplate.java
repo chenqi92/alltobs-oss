@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -912,5 +913,28 @@ public class OssTemplate implements InitializingBean {
         } catch (Exception e) {
             System.err.println("创建子目录并设置生命周期规则失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 生成用于直接上传的预签名URL
+     *
+     * @param bucketName 桶名称
+     * @param objectName 对象名称
+     * @param expiration 有效期，单位为分钟
+     * @return 预签名的URL
+     */
+    public String generatePreSignedUrlForPut(String bucketName, String objectName, int expiration) {
+        if (!doesBucketOrFolderExist(bucketName)) {
+            createBucket(bucketName);
+        }
+
+        String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
+
+        PresignedPutObjectRequest preSignedRequest = s3Presigner.presignPutObject(builder -> builder
+                .putObjectRequest(por -> por.bucket(targetBucket).key(targetObjectName))
+                .signatureDuration(Duration.ofMinutes(expiration)));
+
+        return preSignedRequest.url().toString();
     }
 }

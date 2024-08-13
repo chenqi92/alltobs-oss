@@ -82,7 +82,7 @@ oss:
 - `access-key`可以直接使用控制台账号，但是建议在控制台中生成账号和密钥
 - `secret-key`可以直接使用控制台密钥，但是建议在控制台中生成账号和密钥
 - `bucket-name` 设置一个默认的文件桶，比如不同项目使用同一个文件库，以项目为文件桶分隔
-- `expiring-buckets` 里面设置的是会自动删除的文件夹，创建位置位于bucket-name下，比如bucket-name叫test,那么会在test目录下创建一个生命周期为30天的文件夹temp-bucket-1，生命周期为60天的文件夹temp-bucket-2
+- `expiring-buckets` 里面设置的是生命周期会过期的文件夹，创建位置位于bucket-name下，比如bucket-name叫test,那么会在test目录下创建一个生命周期为30天的文件夹temp-bucket-1，生命周期为60天的文件夹temp-bucket-2
 
 ###  启动类注解`@EnableAllbsOss`
 ![启用](https://nas.allbs.cn:9006/cloudpic/2024/08/7015d4fb5a252f2db7a2a62e02298d6f.png)
