@@ -19,7 +19,7 @@
         <project.build.sourceEncoding>utf-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>utf-8</project.reporting.outputEncoding>
         <java.version>17</java.version>
-        <aws.version>2.27.1</aws.version>
+        <aws.version>2.27.4</aws.version>
         <spring.checkstyle.plugin>0.0.41</spring.checkstyle.plugin>
         <validation.version>3.1.0</validation.version>
         <lombok.version>1.18.34</lombok.version>

@@ -59,6 +59,9 @@ public class OssTemplate implements InitializingBean {
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
                         ossProperties.getAccessKey(), ossProperties.getSecretKey())))
                 .region(Region.of(ossProperties.getRegion()))
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(ossProperties.getPathStyleAccess())
+                        .build())
                 .endpointOverride(URI.create(ossProperties.getEndpoint()))
                 .build();
 
