@@ -66,7 +66,7 @@ public class OssTemplate implements InitializingBean {
 
         // 创建默认的存储桶
         if (StringUtils.hasText(BASE_BUCKET) && !isBucketExist(BASE_BUCKET)) {
-            createBucket(BASE_BUCKET);
+            s3Client.createBucket(CreateBucketRequest.builder().bucket(BASE_BUCKET).build());
         }
 
         // 为每个子目录设置生命周期规则

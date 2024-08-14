@@ -9,7 +9,7 @@
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>
     <description>S3协议的文件上传工具封装、jdk17+</description>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <url>www.allbs.cn</url>
 
     <properties>

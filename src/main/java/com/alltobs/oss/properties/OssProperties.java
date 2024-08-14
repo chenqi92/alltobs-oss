@@ -39,6 +39,7 @@ public class OssProperties {
     private String customDomain;
 
     /**
+     * S3 使用“虚拟托管样式”URL，这意味着桶名称是域名的一部分，而不是路径的一部分
      * true path-style nginx 反向代理和S3默认支持 pathStyle {<a href="http://endpoint/bucketname">...</a>} false
      * supports virtual-hosted-style 阿里云等需要配置为 virtual-hosted-style
      * 模式{<a href="http://bucketname.endpoint">...</a>}
