@@ -55,7 +55,7 @@ version: '3'
 <dependency>
   <groupId>com.alltobs</groupId>
   <artifactId>alltobs-oss</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
 </dependency>
 ```
 
@@ -99,7 +99,7 @@ private OssTemplate ossTemplate;
 以下所有方法都遵循一个原则，当bucket-name不为空时，所有操作都在这个bucket下进行。
 ### 自动创建主目录和带过期时间的子目录
 ![配置](https://nas.allbs.cn:9006/cloudpic/2024/08/ceed18a32c4f64bd00a0b3ca775a8955.png)
-就会自动创建文件桶如下，一个位于`test`目录下且十天后会自动删除的`expire-bucket-1`
+就会自动创建文件桶如下，一个位于`test`目录下且有十天生命周期的的`expire-bucket-1`
 ![创建目录](https://nas.allbs.cn:9006/cloudpic/2024/08/d35e2d1016aa6bd02c4f5bca55cb0a6c.png)
 
 ### 创建bucket
