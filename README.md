@@ -24,7 +24,7 @@
 - 生成预签名url，直接前端上传不经过后端
 
 ## 源码地址
-[demo地址](https://github.com/chenqi92/alltobs-oss)
+[源码地址](https://github.com/chenqi92/alltobs-oss)
 
 ## 使用demo地址
 [demo地址](https://github.com/chenqi92/alltobs-demo/tree/master/alltobs-oss-demo)
