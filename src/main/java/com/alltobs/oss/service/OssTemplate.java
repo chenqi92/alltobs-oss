@@ -2,6 +2,7 @@ package com.alltobs.oss.service;
 
 import com.alltobs.oss.properties.OssProperties;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
  * &#064;date  2024/08/09 13:45
  * @since 1.0.0
  */
+@Slf4j
 @RequiredArgsConstructor
 public class OssTemplate implements InitializingBean {
 
@@ -661,6 +663,23 @@ public class OssTemplate implements InitializingBean {
                 .bucket(targetBucket)
                 .key(targetObjectName)
                 .build());
+
+        // 判断是否生成临时文件标识
+        if (ossProperties.getTempMarker() == 1) {
+            // 创建标记文件来表示这个对象的分片上传已经初始化
+            String markerObjectName = StringUtils.hasText(BASE_BUCKET)
+                    ? bucketName + "/" + objectName + ossProperties.getMarkerName()
+                    : objectName + ossProperties.getMarkerName();
+
+            // 创建标记文件
+            s3Client.putObject(PutObjectRequest.builder()
+                    .bucket(targetBucket)
+                    .key(markerObjectName)
+                    .contentLength(0L)
+                    .build(), RequestBody.empty());
+
+        }
+
         return response.uploadId();
     }
 
@@ -742,6 +761,12 @@ public class OssTemplate implements InitializingBean {
                         .uploadId(uploadId)
                         .multipartUpload(completedMultipartUpload)
                         .build());
+
+        if (ossProperties.getTempMarker() == 1) {
+            // 删除标记文件
+            String markerFileName = objectName + ossProperties.getMarkerName();
+            removeObject(bucketName, markerFileName);
+        }
     }
 
     /**
@@ -761,6 +786,12 @@ public class OssTemplate implements InitializingBean {
                         .key(targetObjectName)
                         .uploadId(uploadId)
                         .build());
+
+        if (ossProperties.getTempMarker() == 1) {
+            // 删除标记文件
+            String markerFileName = objectName + ossProperties.getMarkerName();
+            removeObject(bucketName, markerFileName);
+        }
     }
 
     /**
@@ -914,7 +945,7 @@ public class OssTemplate implements InitializingBean {
         try {
             s3Client.putBucketLifecycleConfiguration(configurationRequest);
         } catch (Exception e) {
-            System.err.println("创建子目录并设置生命周期规则失败：" + e.getMessage());
+            log.error("创建子目录并设置生命周期规则失败：{}", e.getMessage());
         }
     }
 

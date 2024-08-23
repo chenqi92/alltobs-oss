@@ -67,6 +67,16 @@ public class OssProperties {
     private String bucketName;
 
     /**
+     * 是否生成临时文件标识
+     */
+    private int tempMarker = 1;
+
+    /**
+     * 临时文件标识
+     */
+    private String markerName = "_upload_marker";
+
+    /**
      * 定义多个子 Bucket 及其存储时间（单位：天）
      * key 为子 Bucket 名称，value 为存储天数
      */
