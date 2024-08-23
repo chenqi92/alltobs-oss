@@ -9,7 +9,7 @@
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>
     <description>S3协议的文件上传工具封装、jdk17+</description>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <url>www.allbs.cn</url>
 
     <properties>
@@ -19,11 +19,11 @@
         <project.build.sourceEncoding>utf-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>utf-8</project.reporting.outputEncoding>
         <java.version>17</java.version>
-        <aws.version>2.27.4</aws.version>
-        <spring.checkstyle.plugin>0.0.41</spring.checkstyle.plugin>
+        <aws.version>2.27.11</aws.version>
+        <spring.checkstyle.plugin>0.0.43</spring.checkstyle.plugin>
         <validation.version>3.1.0</validation.version>
         <lombok.version>1.18.34</lombok.version>
-        <spring-boot.verison>3.3.2</spring-boot.verison>
+        <spring-boot.verison>3.3.3</spring-boot.verison>
     </properties>
 
     <dependencies>
@@ -74,10 +74,14 @@
     </licenses>
     <scm>
         <tag>V{project.version}</tag>
-        <url>git@github.com:chenqi92/alltobs-oss.git</url>
+        <url>https://github.com/chenqi92/alltobs-oss</url>
         <connection>scm:git:git@github.com:chenqi92/alltobs-oss.git</connection>
         <developerConnection>scm:git:git@github.com:chenqi92/alltobs-oss.git</developerConnection>
     </scm>
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/chenqi92/alltobs-oss/issues</url>
+    </issueManagement>
     <developers>
         <developer>
             <name>ChenQi</name>
