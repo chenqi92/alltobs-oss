@@ -47,25 +47,9 @@ public class OssTemplate implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        s3Client = S3Client.builder()
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
-                        ossProperties.getAccessKey(), ossProperties.getSecretKey())))
-                .region(Region.of(ossProperties.getRegion()))
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(ossProperties.getPathStyleAccess())
-                        .build())
-                .endpointOverride(URI.create(ossProperties.getEndpoint()))
-                .build();
+        s3Client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ossProperties.getAccessKey(), ossProperties.getSecretKey()))).region(Region.of(ossProperties.getRegion())).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(ossProperties.getPathStyleAccess()).build()).endpointOverride(URI.create(ossProperties.getEndpoint())).build();
 
-        s3Presigner = S3Presigner.builder()
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(
-                        ossProperties.getAccessKey(), ossProperties.getSecretKey())))
-                .region(Region.of(ossProperties.getRegion()))
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(ossProperties.getPathStyleAccess())
-                        .build())
-                .endpointOverride(URI.create(ossProperties.getEndpoint()))
-                .build();
+        s3Presigner = S3Presigner.builder().credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ossProperties.getAccessKey(), ossProperties.getSecretKey()))).region(Region.of(ossProperties.getRegion())).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(ossProperties.getPathStyleAccess()).build()).endpointOverride(URI.create(ossProperties.getEndpoint())).build();
 
         BASE_BUCKET = ossProperties.getBucketName();
 
@@ -100,11 +84,7 @@ public class OssTemplate implements InitializingBean {
         if (StringUtils.hasText(BASE_BUCKET)) {
             // 构建目标前缀，确保 folderName 以 "/" 结尾
             String targetPrefix = bucketName.endsWith("/") ? bucketName : bucketName + "/";
-            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                    .bucket(BASE_BUCKET)
-                    .prefix(targetPrefix)
-                    .delimiter("/")
-                    .build());
+            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).prefix(targetPrefix).delimiter("/").build());
             return !response.contents().isEmpty();
         } else {
             return s3Client.listBuckets().buckets().stream().anyMatch(b -> b.name().equals(bucketName));
@@ -124,11 +104,7 @@ public class OssTemplate implements InitializingBean {
         String targetPrefix = folderName.endsWith("/") ? folderName : folderName + "/";
 
         // 列出 bucket 下的所有对象，以目标前缀为筛选条件
-        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                .bucket(bucketName)
-                .prefix(targetPrefix)
-                .delimiter("/")
-                .build());
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).prefix(targetPrefix).delimiter("/").build());
 
         // 如果存在bucket，返回 true，否则返回 false
         return !response.contents().isEmpty();
@@ -161,20 +137,14 @@ public class OssTemplate implements InitializingBean {
     public List<String> getAllBuckets() {
         // 如果 BASE_BUCKET 存在，则获取 BASE_BUCKET 目录下的所有“桶”
         if (StringUtils.hasText(BASE_BUCKET)) {
-            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                    .bucket(BASE_BUCKET)
-                    .delimiter("/")
-                    .build());
+            ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).delimiter("/").build());
 
             // 获取所有以 '/' 结尾的“文件夹”名称
-            return response.commonPrefixes().stream()
-                    .map(prefix -> prefix.prefix().replaceAll("/$", "")) // 去除末尾的 '/'
+            return response.commonPrefixes().stream().map(prefix -> prefix.prefix().replaceAll("/$", "")) // 去除末尾的 '/'
                     .collect(Collectors.toList());
         } else {
             // 否则返回所有顶级桶
-            return s3Client.listBuckets().buckets().stream()
-                    .map(Bucket::name)
-                    .collect(Collectors.toList());
+            return s3Client.listBuckets().buckets().stream().map(Bucket::name).collect(Collectors.toList());
         }
     }
 
@@ -189,21 +159,15 @@ public class OssTemplate implements InitializingBean {
         String targetPrefix = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" : "";
         String finalBucketName = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
 
-        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                .bucket(finalBucketName)
-                .prefix(targetPrefix)
-                .build());
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(finalBucketName).prefix(targetPrefix).build());
 
         long totalSize = response.contents().stream().mapToLong(S3Object::size).sum();
         properties.put("size", totalSize);
 
         try {
-            GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(
-                    GetBucketLifecycleConfigurationRequest.builder().bucket(finalBucketName).build());
+            GetBucketLifecycleConfigurationResponse lifecycleConfig = s3Client.getBucketLifecycleConfiguration(GetBucketLifecycleConfigurationRequest.builder().bucket(finalBucketName).build());
 
-            Optional<LifecycleRule> relatedRule = lifecycleConfig.rules().stream()
-                    .filter(rule -> rule.filter().prefix().equals(targetPrefix))
-                    .findFirst();
+            Optional<LifecycleRule> relatedRule = lifecycleConfig.rules().stream().filter(rule -> rule.filter().prefix().equals(targetPrefix)).findFirst();
 
             properties.put("lifecycleRules", relatedRule.orElse(null));
         } catch (Exception e) {
@@ -247,9 +211,7 @@ public class OssTemplate implements InitializingBean {
         }
 
         // 创建 ListObjectsV2Request，带上前缀
-        ListObjectsV2Request request = ListObjectsV2Request.builder()
-                .bucket(bucketName)
-                .prefix(prefix)  // 以指定的前缀开头
+        ListObjectsV2Request request = ListObjectsV2Request.builder().bucket(bucketName).prefix(prefix)  // 以指定的前缀开头
                 .build();
 
         // 获取符合条件的所有对象
@@ -283,9 +245,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        PresignedGetObjectRequest getObjectRequest = s3Presigner.presignGetObject(builder -> builder
-                .getObjectRequest(b -> b.bucket(targetBucket).key(targetObjectName))
-                .signatureDuration(expires));
+        PresignedGetObjectRequest getObjectRequest = s3Presigner.presignGetObject(builder -> builder.getObjectRequest(b -> b.bucket(targetBucket).key(targetObjectName)).signatureDuration(expires));
 
         return getObjectRequest.url().toString();
     }
@@ -363,12 +323,7 @@ public class OssTemplate implements InitializingBean {
         String finalBucketName = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String finalObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(finalBucketName)
-                .key(finalObjectName)
-                .contentLength(size)
-                .contentType(contextType)
-                .build();
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(finalBucketName).key(finalObjectName).contentLength(size).contentType(contextType).build();
 
         return s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(stream, size));
     }
@@ -419,13 +374,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .contentLength(size)
-                .contentType(contentType)
-                .expires(expiresAt.toInstant())
-                .build();
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(targetBucket).key(targetObjectName).contentLength(size).contentType(contentType).expires(expiresAt.toInstant()).build();
 
         return s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(stream, size));
     }
@@ -438,11 +387,7 @@ public class OssTemplate implements InitializingBean {
      * @param content    文件内容
      */
     public void putObject(String bucketName, String objectName, byte[] content) {
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(objectName)
-                .contentLength((long) content.length)
-                .build();
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(bucketName).key(objectName).contentLength((long) content.length).build();
 
         s3Client.putObject(putObjectRequest, RequestBody.fromBytes(content));
     }
@@ -505,21 +450,11 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetPrefix = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        LifecycleRule rule = LifecycleRule.builder()
-                .id("AutoDelete-" + objectName)
-                .filter(LifecycleRuleFilter.builder().prefix(targetPrefix).build())
-                .expiration(LifecycleExpiration.builder().days((int) expirationDays).build())
-                .status(ExpirationStatus.ENABLED)
-                .build();
+        LifecycleRule rule = LifecycleRule.builder().id("AutoDelete-" + objectName).filter(LifecycleRuleFilter.builder().prefix(targetPrefix).build()).expiration(LifecycleExpiration.builder().days((int) expirationDays).build()).status(ExpirationStatus.ENABLED).build();
 
-        BucketLifecycleConfiguration configuration = BucketLifecycleConfiguration.builder()
-                .rules(rule)
-                .build();
+        BucketLifecycleConfiguration configuration = BucketLifecycleConfiguration.builder().rules(rule).build();
 
-        s3Client.putBucketLifecycleConfiguration(PutBucketLifecycleConfigurationRequest.builder()
-                .bucket(targetBucket)
-                .lifecycleConfiguration(configuration)
-                .build());
+        s3Client.putBucketLifecycleConfiguration(PutBucketLifecycleConfigurationRequest.builder().bucket(targetBucket).lifecycleConfiguration(configuration).build());
     }
 
     /**
@@ -529,23 +464,15 @@ public class OssTemplate implements InitializingBean {
      */
     public void cleanupExpiredObjects(String bucketName) {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
-        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder()
-                .bucket(bucketName)
-                .build());
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(bucketName).build());
 
         for (S3Object s3Object : response.contents()) {
-            HeadObjectResponse headObjectResponse = s3Client.headObject(HeadObjectRequest.builder()
-                    .bucket(targetBucket)
-                    .key(s3Object.key())
-                    .build());
+            HeadObjectResponse headObjectResponse = s3Client.headObject(HeadObjectRequest.builder().bucket(targetBucket).key(s3Object.key()).build());
 
             String expiresAt = headObjectResponse.metadata().get("expiresAt");
             if (expiresAt != null && Long.parseLong(expiresAt) < System.currentTimeMillis()) {
                 // 删除过期的对象
-                s3Client.deleteObject(DeleteObjectRequest.builder()
-                        .bucket(targetBucket)
-                        .key(s3Object.key())
-                        .build());
+                s3Client.deleteObject(DeleteObjectRequest.builder().bucket(targetBucket).key(s3Object.key()).build());
             }
         }
     }
@@ -571,17 +498,10 @@ public class OssTemplate implements InitializingBean {
      * @param objectName 文件名称
      */
     public void removeObject(String bucketName, String objectName) {
-        String finalBucketName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET)
-                ? BASE_BUCKET
-                : bucketName;
-        String finalObjectName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET)
-                ? bucketName + "/" + objectName
-                : objectName;
+        String finalBucketName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET) ? BASE_BUCKET : bucketName;
+        String finalObjectName = StringUtils.hasText(BASE_BUCKET) && !bucketName.equals(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        s3Client.deleteObject(DeleteObjectRequest.builder()
-                .bucket(finalBucketName)
-                .key(finalObjectName)
-                .build());
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(finalBucketName).key(finalObjectName).build());
     }
 
     /**
@@ -603,13 +523,7 @@ public class OssTemplate implements InitializingBean {
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
         // 使用 AES256 作为服务器端加密
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .contentLength(size)
-                .contentType(contentType)
-                .serverSideEncryption(ServerSideEncryption.AES256)
-                .build();
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(targetBucket).key(targetObjectName).contentLength(size).contentType(contentType).serverSideEncryption(ServerSideEncryption.AES256).build();
 
         return s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(stream, size));
     }
@@ -633,13 +547,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .contentLength(size)
-                .contentType(contentType)
-                .serverSideEncryption(ServerSideEncryption.fromValue(sseAlgorithm))
-                .build();
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(targetBucket).key(targetObjectName).contentLength(size).contentType(contentType).serverSideEncryption(ServerSideEncryption.fromValue(sseAlgorithm)).build();
 
         return s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(stream, size));
     }
@@ -659,24 +567,15 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .build());
+        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder().bucket(targetBucket).key(targetObjectName).build());
 
         // 判断是否生成临时文件标识
         if (ossProperties.getTempMarker() == 1) {
             // 创建标记文件来表示这个对象的分片上传已经初始化
-            String markerObjectName = StringUtils.hasText(BASE_BUCKET)
-                    ? bucketName + "/" + objectName + ossProperties.getMarkerName()
-                    : objectName + ossProperties.getMarkerName();
+            String markerObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName + ossProperties.getMarkerName() : objectName + ossProperties.getMarkerName();
 
             // 创建标记文件
-            s3Client.putObject(PutObjectRequest.builder()
-                    .bucket(targetBucket)
-                    .key(markerObjectName)
-                    .contentLength(0L)
-                    .build(), RequestBody.empty());
+            s3Client.putObject(PutObjectRequest.builder().bucket(targetBucket).key(markerObjectName).contentLength(0L).build(), RequestBody.empty());
 
         }
 
@@ -698,18 +597,8 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        UploadPartResponse response = s3Client.uploadPart(UploadPartRequest.builder()
-                        .bucket(targetBucket)
-                        .key(targetObjectName)
-                        .uploadId(uploadId)
-                        .partNumber(partNumber)
-                        .contentLength((long) buffer.length)
-                        .build(),
-                RequestBody.fromBytes(buffer));
-        return CompletedPart.builder()
-                .partNumber(partNumber)
-                .eTag(response.eTag())
-                .build();
+        UploadPartResponse response = s3Client.uploadPart(UploadPartRequest.builder().bucket(targetBucket).key(targetObjectName).uploadId(uploadId).partNumber(partNumber).contentLength((long) buffer.length).build(), RequestBody.fromBytes(buffer));
+        return CompletedPart.builder().partNumber(partNumber).eTag(response.eTag()).build();
     }
 
     /**
@@ -724,19 +613,9 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        ListPartsResponse response = s3Client.listParts(
-                ListPartsRequest.builder()
-                        .bucket(targetBucket)
-                        .key(targetObjectName)
-                        .uploadId(uploadId)
-                        .build());
+        ListPartsResponse response = s3Client.listParts(ListPartsRequest.builder().bucket(targetBucket).key(targetObjectName).uploadId(uploadId).build());
 
-        return response.parts().stream()
-                .map(p -> CompletedPart.builder()
-                        .partNumber(p.partNumber())
-                        .eTag(p.eTag())
-                        .build())
-                .collect(Collectors.toList());
+        return response.parts().stream().map(p -> CompletedPart.builder().partNumber(p.partNumber()).eTag(p.eTag()).build()).collect(Collectors.toList());
     }
 
     /**
@@ -751,16 +630,8 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
-                .parts(completedParts)
-                .build();
-        s3Client.completeMultipartUpload(
-                CompleteMultipartUploadRequest.builder()
-                        .bucket(targetBucket)
-                        .key(targetObjectName)
-                        .uploadId(uploadId)
-                        .multipartUpload(completedMultipartUpload)
-                        .build());
+        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder().parts(completedParts).build();
+        s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder().bucket(targetBucket).key(targetObjectName).uploadId(uploadId).multipartUpload(completedMultipartUpload).build());
 
         if (ossProperties.getTempMarker() == 1) {
             // 删除标记文件
@@ -780,12 +651,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        s3Client.abortMultipartUpload(
-                AbortMultipartUploadRequest.builder()
-                        .bucket(targetBucket)
-                        .key(targetObjectName)
-                        .uploadId(uploadId)
-                        .build());
+        s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder().bucket(targetBucket).key(targetObjectName).uploadId(uploadId).build());
 
         if (ossProperties.getTempMarker() == 1) {
             // 删除标记文件
@@ -803,12 +669,7 @@ public class OssTemplate implements InitializingBean {
     public void setBucketVersioning(String bucketName, boolean enable) {
         String status = enable ? "Enabled" : "Suspended";
 
-        s3Client.putBucketVersioning(PutBucketVersioningRequest.builder()
-                .bucket(bucketName)
-                .versioningConfiguration(VersioningConfiguration.builder()
-                        .status(status)
-                        .build())
-                .build());
+        s3Client.putBucketVersioning(PutBucketVersioningRequest.builder().bucket(bucketName).versioningConfiguration(VersioningConfiguration.builder().status(status).build()).build());
     }
 
     /**
@@ -828,12 +689,7 @@ public class OssTemplate implements InitializingBean {
         String targetDestinationKey = StringUtils.hasText(BASE_BUCKET) ? destinationBucketName + "/" + destinationKey : destinationKey;
 
         // 构建 CopyObjectRequest 并执行复制操作
-        CopyObjectRequest copyObjectRequest = CopyObjectRequest.builder()
-                .sourceBucket(targetSourceBucket)
-                .sourceKey(targetSourceKey)
-                .destinationBucket(targetDestinationBucket)
-                .destinationKey(targetDestinationKey)
-                .build();
+        CopyObjectRequest copyObjectRequest = CopyObjectRequest.builder().sourceBucket(targetSourceBucket).sourceKey(targetSourceKey).destinationBucket(targetDestinationBucket).destinationKey(targetDestinationKey).build();
 
         s3Client.copyObject(copyObjectRequest);
     }
@@ -849,11 +705,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        s3Client.putObjectAcl(PutObjectAclRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .acl(acl)
-                .build());
+        s3Client.putObjectAcl(PutObjectAclRequest.builder().bucket(targetBucket).key(targetObjectName).acl(acl).build());
     }
 
     /**
@@ -867,10 +719,7 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        return s3Client.getObjectAcl(GetObjectAclRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .build());
+        return s3Client.getObjectAcl(GetObjectAclRequest.builder().bucket(targetBucket).key(targetObjectName).build());
     }
 
     /**
@@ -884,17 +733,9 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        Tagging tagging = Tagging.builder()
-                .tagSet(tags.entrySet().stream()
-                        .map(entry -> Tag.builder().key(entry.getKey()).value(entry.getValue()).build())
-                        .collect(Collectors.toList()))
-                .build();
+        Tagging tagging = Tagging.builder().tagSet(tags.entrySet().stream().map(entry -> Tag.builder().key(entry.getKey()).value(entry.getValue()).build()).collect(Collectors.toList())).build();
 
-        s3Client.putObjectTagging(PutObjectTaggingRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .tagging(tagging)
-                .build());
+        s3Client.putObjectTagging(PutObjectTaggingRequest.builder().bucket(targetBucket).key(targetObjectName).tagging(tagging).build());
     }
 
     /**
@@ -908,13 +749,9 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        GetObjectTaggingResponse taggingResponse = s3Client.getObjectTagging(GetObjectTaggingRequest.builder()
-                .bucket(targetBucket)
-                .key(targetObjectName)
-                .build());
+        GetObjectTaggingResponse taggingResponse = s3Client.getObjectTagging(GetObjectTaggingRequest.builder().bucket(targetBucket).key(targetObjectName).build());
 
-        return taggingResponse.tagSet().stream()
-                .collect(Collectors.toMap(Tag::key, Tag::value));
+        return taggingResponse.tagSet().stream().collect(Collectors.toMap(Tag::key, Tag::value));
     }
 
     /**
@@ -930,17 +767,9 @@ public class OssTemplate implements InitializingBean {
         String folderPrefix = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET + "/" + subBucketName + "/" : subBucketName + "/";
 
         // 设置生命周期规则
-        LifecycleRule rule = LifecycleRule.builder()
-                .id("AutoDeleteRule-" + subBucketName)
-                .filter(LifecycleRuleFilter.builder().prefix(folderPrefix).build())
-                .expiration(LifecycleExpiration.builder().days(expirationDays).build())
-                .status(ExpirationStatus.ENABLED)
-                .build();
+        LifecycleRule rule = LifecycleRule.builder().id("AutoDeleteRule-" + subBucketName).filter(LifecycleRuleFilter.builder().prefix(folderPrefix).build()).expiration(LifecycleExpiration.builder().days(expirationDays).build()).status(ExpirationStatus.ENABLED).build();
 
-        PutBucketLifecycleConfigurationRequest configurationRequest = PutBucketLifecycleConfigurationRequest.builder()
-                .bucket(StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : subBucketName)
-                .lifecycleConfiguration(BucketLifecycleConfiguration.builder().rules(rule).build())
-                .build();
+        PutBucketLifecycleConfigurationRequest configurationRequest = PutBucketLifecycleConfigurationRequest.builder().bucket(StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : subBucketName).lifecycleConfiguration(BucketLifecycleConfiguration.builder().rules(rule).build()).build();
 
         try {
             s3Client.putBucketLifecycleConfiguration(configurationRequest);
@@ -965,10 +794,130 @@ public class OssTemplate implements InitializingBean {
         String targetBucket = StringUtils.hasText(BASE_BUCKET) ? BASE_BUCKET : bucketName;
         String targetObjectName = StringUtils.hasText(BASE_BUCKET) ? bucketName + "/" + objectName : objectName;
 
-        PresignedPutObjectRequest preSignedRequest = s3Presigner.presignPutObject(builder -> builder
-                .putObjectRequest(por -> por.bucket(targetBucket).key(targetObjectName))
-                .signatureDuration(Duration.ofMinutes(expiration)));
+        PresignedPutObjectRequest preSignedRequest = s3Presigner.presignPutObject(builder -> builder.putObjectRequest(por -> por.bucket(targetBucket).key(targetObjectName)).signatureDuration(Duration.ofMinutes(expiration)));
 
         return preSignedRequest.url().toString();
+    }
+
+    /**
+     * 获取指定目录下所有目录和文件，并根据文件类型进行过滤。
+     *
+     * @param folderName     指定的目录名称（相对路径）
+     * @param fileExtensions 支持的文件扩展名列表，多个扩展名可以一起传入
+     * @return 指定目录下所有符合条件的文件和子目录
+     */
+    public List<String> listFilesAndFolders(String folderName, String... fileExtensions) {
+        // 如果文件扩展名为空，则返回所有文件和文件夹
+        if (fileExtensions == null || fileExtensions.length == 0) {
+            return listFilesAndFolders(folderName);
+        }
+
+        // 构建目标前缀，确保 folderName 以 "/" 结尾
+        if (folderName == null || folderName.trim().isEmpty()) {
+            folderName = "";
+        } else {
+            // 确保 folderName 以 "/" 结尾
+            folderName = folderName.endsWith("/") ? folderName : folderName + "/";
+        }
+
+        // 列出指定目录下的所有对象
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).prefix(folderName).delimiter("/").build());
+
+        // 获取所有目录和文件
+        List<String> result = new ArrayList<>();
+
+        // 处理文件夹（以 "/" 结尾）
+        result.addAll(response.commonPrefixes().stream().map(prefix -> prefix.prefix().replaceAll("/$", "")) // 去除末尾的 '/'
+                .toList());
+
+        // 过滤文件，检查文件扩展名
+        result.addAll(response.contents().stream().map(S3Object::key).filter(fileName -> Arrays.stream(fileExtensions).toList().stream().anyMatch(fileName::endsWith)) // 过滤指定类型的文件
+                .toList());
+
+        return result;
+    }
+
+    /**
+     * 获取指定目录下所有目录和文件（不进行文件类型过滤）。
+     *
+     * @param folderName 指定的目录名称（相对路径）
+     * @return 指定目录下所有的文件和目录
+     */
+    private List<String> listFilesAndFolders(String folderName) {
+        // 如果 folderName 为空或 null，默认查询当前目录（根目录）
+        if (folderName == null || folderName.trim().isEmpty()) {
+            folderName = "";
+        } else {
+            // 确保 folderName 以 "/" 结尾
+            folderName = folderName.endsWith("/") ? folderName : folderName + "/";
+        }
+
+        // 列出指定目录下的所有对象
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).prefix(folderName).delimiter("/").build());
+
+        // 获取所有目录和文件
+        List<String> result = new ArrayList<>();
+
+        // 处理文件夹（以 "/" 结尾）
+        result.addAll(response.commonPrefixes().stream().map(prefix -> prefix.prefix().replaceAll("/$", "")) // 去除末尾的 '/'
+                .toList());
+
+        // 添加所有文件
+        result.addAll(response.contents().stream().map(S3Object::key).toList());
+
+        return result;
+    }
+
+    /**
+     * 获取指定目录下所有文件，并根据文件类型进行过滤。
+     *
+     * @param folderName     指定的目录名称（相对路径）
+     * @param fileExtensions 支持的文件扩展名列表，多个扩展名可以一起传入
+     * @return 指定目录下所有符合条件的文件和子目录
+     */
+    public List<String> listFiles(String folderName, String... fileExtensions) {
+        // 如果文件扩展名为空，则返回所有文件和文件夹
+        if (fileExtensions == null || fileExtensions.length == 0) {
+            return listFiles(folderName);
+        }
+
+        // 构建目标前缀，确保 folderName 以 "/" 结尾
+        if (folderName == null || folderName.trim().isEmpty()) {
+            folderName = "";
+        } else {
+            // 确保 folderName 以 "/" 结尾
+            folderName = folderName.endsWith("/") ? folderName : folderName + "/";
+        }
+
+        // 列出指定目录下的所有对象
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).prefix(folderName).delimiter("/").build());
+
+        // 过滤文件，检查文件扩展名
+        // 过滤指定类型的文件
+
+        return new ArrayList<>(response.contents().stream().map(S3Object::key).filter(fileName -> Arrays.stream(fileExtensions).toList().stream().anyMatch(fileName::endsWith)) // 过滤指定类型的文件
+                .toList());
+    }
+
+    /**
+     * 获取指定目录下所有文件（不进行文件类型过滤）。
+     *
+     * @param folderName 指定的目录名称（相对路径）
+     * @return 指定目录下所有的文件和目录
+     */
+    private List<String> listFiles(String folderName) {
+        // 如果 folderName 为空或 null，默认查询当前目录（根目录）
+        if (folderName == null || folderName.trim().isEmpty()) {
+            folderName = "";
+        } else {
+            // 确保 folderName 以 "/" 结尾
+            folderName = folderName.endsWith("/") ? folderName : folderName + "/";
+        }
+
+        // 列出指定目录下的所有对象
+        ListObjectsV2Response response = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(BASE_BUCKET).prefix(folderName).delimiter("/").build());
+
+        // 获取所有文件
+        return new ArrayList<>(response.contents().stream().map(S3Object::key).toList());
     }
 }
