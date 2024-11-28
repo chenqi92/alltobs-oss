@@ -9,7 +9,7 @@
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>
     <description>S3协议的文件上传工具封装、jdk17+</description>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <url>www.allbs.cn</url>
 
     <properties>
@@ -19,11 +19,11 @@
         <project.build.sourceEncoding>utf-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>utf-8</project.reporting.outputEncoding>
         <java.version>17</java.version>
-        <aws.version>2.27.11</aws.version>
+        <aws.version>2.29.22</aws.version>
         <spring.checkstyle.plugin>0.0.43</spring.checkstyle.plugin>
         <validation.version>3.1.0</validation.version>
         <lombok.version>1.18.34</lombok.version>
-        <spring-boot.verison>3.3.3</spring-boot.verison>
+        <spring-boot.verison>3.4.0</spring-boot.verison>
     </properties>
 
     <dependencies>
