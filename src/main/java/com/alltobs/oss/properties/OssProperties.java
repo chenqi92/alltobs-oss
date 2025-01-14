@@ -34,6 +34,11 @@ public class OssProperties {
     private String endpoint;
 
     /**
+     * 预览地址
+     */
+    private String previewUrl = endpoint;
+
+    /**
      * 自定义域名
      */
     private String customDomain;

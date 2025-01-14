@@ -49,7 +49,7 @@ public class OssTemplate implements InitializingBean {
     public void afterPropertiesSet() throws Exception {
         s3Client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ossProperties.getAccessKey(), ossProperties.getSecretKey()))).region(Region.of(ossProperties.getRegion())).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(ossProperties.getPathStyleAccess()).build()).endpointOverride(URI.create(ossProperties.getEndpoint())).build();
 
-        s3Presigner = S3Presigner.builder().credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ossProperties.getAccessKey(), ossProperties.getSecretKey()))).region(Region.of(ossProperties.getRegion())).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(ossProperties.getPathStyleAccess()).build()).endpointOverride(URI.create(ossProperties.getEndpoint())).build();
+        s3Presigner = S3Presigner.builder().credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ossProperties.getAccessKey(), ossProperties.getSecretKey()))).region(Region.of(ossProperties.getRegion())).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(ossProperties.getPathStyleAccess()).build()).endpointOverride(URI.create(ossProperties.getPreviewUrl())).build();
 
         BASE_BUCKET = ossProperties.getBucketName();
 

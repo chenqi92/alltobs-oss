@@ -9,7 +9,7 @@
     <name>${project.artifactId}</name>
     <packaging>jar</packaging>
     <description>S3协议的文件上传工具封装、jdk17+</description>
-    <version>1.0.3</version>
+    <version>1.0.5</version>
     <url>www.allbs.cn</url>
 
     <properties>
@@ -23,7 +23,7 @@
         <spring.checkstyle.plugin>0.0.43</spring.checkstyle.plugin>
         <validation.version>3.1.0</validation.version>
         <lombok.version>1.18.34</lombok.version>
-        <spring-boot.verison>3.4.0</spring-boot.verison>
+        <spring-boot.verison>3.4.1</spring-boot.verison>
     </properties>
 
     <dependencies>
