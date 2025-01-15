@@ -55,7 +55,7 @@ version: '3'
 <dependency>
   <groupId>com.alltobs</groupId>
   <artifactId>alltobs-oss</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.5</version>
 </dependency>
 ```
 
@@ -64,6 +64,8 @@ version: '3'
 ```yaml
 oss:
   endpoint: http://xxx.xxx.xxx.xxx:9000
+  # 预览用的url，和上传文件的endpoint分开，如果不填则默认为endpoint，用于上传走内网，但是使用文件走外网的场合
+  previewUrl: https://xxx.xxx.xxx.xxx:9000
   # 所在地区
   region: cn-north-1
   # minio账号或者
